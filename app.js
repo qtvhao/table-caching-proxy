@@ -43,7 +43,6 @@ const myProxy = createProxyMiddleware({
     target: 'http://localhost:8000',
     router: function (req) {
         let {requestFullUrl, origin} = getOriginUrl(req);
-        console.log(origin, requestFullUrl)
         return origin; // protocol + host
     },
     onProxyReq(proxyReq, req) {
