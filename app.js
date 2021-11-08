@@ -22,15 +22,48 @@ function refreshProxyTable() {
 
 refreshProxyTable()
 setInterval(refreshProxyTable, 60e3 * 30)
+
+function getFullUrl(req) {
+    return req.protocol + '://' + req.get('host') + req.originalUrl;
+}
+
+function getOriginUrl(req) {
+    const requestFullUrl = getFullUrl(req);
+    let origin = global.proxyTable[requestFullUrl];
+    return {requestFullUrl, origin};
+}
+
+function getOrigin(host, url) {
+    // noinspection HttpUrlsUsage
+    let originUrl = global.proxyTable['https://' + host + url] || global.proxyTable['http://' + host + url];
+    return new URL(originUrl);
+}
+
 const myProxy = createProxyMiddleware({
     target: 'http://localhost:8000',
     router: function (req) {
-        const requestFullUrl = req.protocol + '://' + req.get('host') + req.originalUrl;
-        let origin = global.proxyTable[requestFullUrl];
-        console.log(origin)
+        let {requestFullUrl, origin} = getOriginUrl(req);
+        console.log(origin, requestFullUrl)
         return origin; // protocol + host
     },
-    changeOrigin: true
+    onProxyReq(proxyReq, req) {
+        let hostname = proxyReq.host;
+        let host = req.headers.host;
+        let url = req.url;
+        let origin = getOrigin(host, url);
+        proxyReq.path = origin.pathname
+        let outgoingHeaders = {
+            host: hostname,
+        };
+        let headerNames = proxyReq.getHeaderNames();
+        for (let i = 0; i < headerNames.length; i++) {
+            proxyReq.removeHeader(headerNames[i])
+        }
+        for (const outgoingHeadersKey in outgoingHeaders) {
+            proxyReq.setHeader(outgoingHeadersKey, outgoingHeaders[outgoingHeadersKey])
+        }
+    },
+    changeOrigin: true,
 });
 
 const app = express();
