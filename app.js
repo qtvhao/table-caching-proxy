@@ -43,7 +43,18 @@ const myProxy = createProxyMiddleware({
     target: 'http://localhost:8000',
     router: function (req) {
         let {requestFullUrl, origin} = getOriginUrl(req);
+        console.log(origin, '->', requestFullUrl)
         return origin; // protocol + host
+    },
+    onProxyRes(proxyRes) {
+        const newHeaders = {}
+        for (const proxyResHeaderKey in proxyRes.headers) {
+            if (['content-type', 'content-length', 'connection', 'accept-ranges', 'vary'].includes(proxyResHeaderKey)) {
+                newHeaders[proxyResHeaderKey] = proxyRes.headers[proxyResHeaderKey]
+            }
+        }
+        newHeaders['cache-control'] = 'public, max-age=15552000'
+        proxyRes.headers = newHeaders
     },
     onProxyReq(proxyReq, req) {
         let hostname = proxyReq.host;
