@@ -1,6 +1,7 @@
 const express = require('express');
 const {createProxyMiddleware} = require('http-proxy-middleware');
 const axios = require('axios')
+const path = require("path");
 
 global.proxyTable = {
     'http://localhost/': 'https://www.example.org/',
@@ -8,6 +9,9 @@ global.proxyTable = {
 }
 
 function refreshProxyTable() {
+    if (typeof process.env.PROXY_TABLE_REGISTRY === "undefined") {
+        return
+    }
     axios(process.env.PROXY_TABLE_REGISTRY)
         .then(function (resp) {
             if (typeof resp.data === "string") {
@@ -36,6 +40,9 @@ function getOriginUrl(req) {
 function getOrigin(host, url) {
     // noinspection HttpUrlsUsage
     let originUrl = global.proxyTable['https://' + host + url] || global.proxyTable['http://' + host + url];
+    if (typeof originUrl === "undefined") {
+        return undefined
+    }
     return new URL(originUrl);
 }
 
@@ -46,7 +53,7 @@ const myProxy = createProxyMiddleware({
         console.log(origin, '->', requestFullUrl)
         return origin; // protocol + host
     },
-    onProxyRes(proxyRes) {
+    onProxyRes(proxyRes, res, req) {
         const newHeaders = {}
         for (const proxyResHeaderKey in proxyRes.headers) {
             if (['content-type', 'content-length', 'connection', 'accept-ranges', 'vary'].includes(proxyResHeaderKey)) {
@@ -54,6 +61,11 @@ const myProxy = createProxyMiddleware({
             }
         }
         newHeaders['cache-control'] = 'public, max-age=15552000'
+        if (!newHeaders['content-type'].startsWith('image') || proxyRes.statusCode !== 200) {
+            newHeaders['content-type'] = 'image/png'
+            proxyRes.statusCode = 301
+            newHeaders['location'] = '/monterey.jpeg'
+        }
         proxyRes.headers = newHeaders
     },
     onProxyReq(proxyReq, req) {
@@ -64,6 +76,14 @@ const myProxy = createProxyMiddleware({
         proxyReq.path = origin.pathname
         let outgoingHeaders = {
             host: hostname,
+            accept: 'image/webp,image/png,image/svg+xml,image/*;q=0.8,video/*;q=0.8,*/*;q=0.5',
+            pragma: 'no-cache',
+            referer: 'https://www.google.com/',
+            'cache-control': 'no-cache',
+            'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.1 Safari/605.1.15',
+            'accept-language': 'en-CA,en-US;q=0.9,en;q=0.8',
+            'accept-encoding': 'gzip, deflate, br',
+            connection: 'close'
         };
         let headerNames = proxyReq.getHeaderNames();
         for (let i = 0; i < headerNames.length; i++) {
@@ -77,6 +97,8 @@ const myProxy = createProxyMiddleware({
 });
 
 const app = express();
+app.get('/monterey.jpeg', function (req, res) {
+    return res.sendFile(path.resolve(__dirname, './monterey.jpeg'))
+})
 app.use(myProxy); // add the proxy to express
-
 app.listen(80);
