@@ -16,8 +16,9 @@ cd app
 ```
 ```shell
 sudo docker run -d \
-  -p 80:80 --rm \
+  -p 80:80 \
   --name proxy \
+  --restart always \
   -v ${HOME}/app:/usr/src/app \
   -w /usr/src/app node \
   sh -c "yarn install;PROXY_TABLE_REGISTRY= node app.js"
